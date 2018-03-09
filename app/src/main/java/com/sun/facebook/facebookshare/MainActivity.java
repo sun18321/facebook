@@ -2,7 +2,9 @@ package com.sun.facebook.facebookshare;
 
 import android.Manifest;
 import android.content.ContentUris;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -16,13 +18,18 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
 
+import com.facebook.AccessToken;
+import com.facebook.AccessTokenManager;
 import com.facebook.CallbackManager;
 import com.facebook.FacebookCallback;
 import com.facebook.FacebookException;
+import com.facebook.login.LoginManager;
+import com.facebook.login.LoginResult;
 import com.facebook.share.Sharer;
 import com.facebook.share.model.ShareLinkContent;
 import com.facebook.share.model.SharePhoto;
@@ -31,12 +38,15 @@ import com.facebook.share.widget.ShareButton;
 import com.facebook.share.widget.ShareDialog;
 
 import java.io.FileNotFoundException;
+import java.util.Arrays;
 
 public class MainActivity extends AppCompatActivity {
     private final int CHOOSE_PHOTO = 1001;
-    private ShareButton mShareButton;
+    private static String facebookPkgName = "com.facebook.katana";
     private CallbackManager mCallbackManager;
     private ShareDialog mShareDialog;
+    private Bitmap publish_bitmap;
+    private SharePhotoContent mPhotoContent;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,21 +57,12 @@ public class MainActivity extends AppCompatActivity {
         initPermission();
         initFacebook();
 
-        mShareButton = (ShareButton) findViewById(R.id.share);
-
-        mShareButton.setOnClickListener(new View.OnClickListener() {
+        findViewById(R.id.button).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 choosePhoto();
             }
         });
-
-//        findViewById(R.id.button).setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View v) {
-//                choosePhoto();
-//            }
-//        });
 
     }
 
@@ -85,12 +86,22 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-//        if (mShareDialog.canShow(ShareLinkContent.class)) {
-//            ShareLinkContent linkContent = new ShareLinkContent.Builder().setContentUrl(
-//                    (Uri.parse("http://developers.facebook.com/android"))
-//            ).build();
-//            mShareDialog.show(linkContent);
-//        }
+        LoginManager.getInstance().registerCallback(mCallbackManager,new FacebookCallback<LoginResult>() {
+            @Override
+            public void onSuccess(LoginResult loginResult) {
+                showFacebookDialog(mPhotoContent);
+            }
+
+            @Override
+            public void onCancel() {
+
+            }
+
+            @Override
+            public void onError(FacebookException error) {
+
+            }
+        });
     }
 
     private void initPermission() {
@@ -160,12 +171,48 @@ public class MainActivity extends AppCompatActivity {
 
     private void shareTofb(Bitmap bitmap) {
         SharePhoto photo = new SharePhoto.Builder().setBitmap(bitmap).build();
-        SharePhotoContent content = new SharePhotoContent.Builder().addPhoto(photo).build();
-        mShareButton.setShareContent(content);
+        mPhotoContent = new SharePhotoContent.Builder().addPhoto(photo).build();
+
+        if (!checkApkExist(this, facebookPkgName)) {
+            boolean loggedIn = AccessToken.getCurrentAccessToken() == null;
+            if (loggedIn) {
+//            LoginManager.getInstance().logInWithReadPermissions(this, Arrays.asList("public_profile"));
+                LoginManager.getInstance().logInWithPublishPermissions(this, Arrays.asList("publish_actions"));
+            }
+        }
+
+        showFacebookDialog(mPhotoContent);
+
+//        if (mShareDialog.canShow(ShareLinkContent.class)) {
+////            ShareLinkContent linkContent = new ShareLinkContent.Builder().setContentUrl(
+////                    (Uri.parse("http://developers.facebook.com/android"))
+////            ).build();
+//            mShareDialog.show(this,content);
+//        }
+//        mShareButton.setShareContent(content);
+
+//        LoginManager.getInstance().logInWithPublishPermissions(this, Arrays.asList("publish_actions"));
+
     }
 
+    private void showFacebookDialog(SharePhotoContent content) {
+        if (mShareDialog.canShow(ShareLinkContent.class)) {
+            mShareDialog.show(this,content);
+        }
+    }
 
-
+    public static boolean checkApkExist(Context context, String packageName){
+        if (TextUtils.isEmpty(packageName))
+            return false;
+        try {
+            ApplicationInfo info = context.getPackageManager()
+                    .getApplicationInfo(packageName,
+                            PackageManager.GET_UNINSTALLED_PACKAGES);
+            return true;
+        } catch (PackageManager.NameNotFoundException e) {
+            return false;
+        }
+    }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
